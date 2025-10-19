@@ -58,6 +58,12 @@
       <h3 class="text-3xl">{{ t("index.empty.title") }}</h3>
       <h3 class="mt-2">{{ t("index.empty.deviceHint") }}</h3>
       <h3>{{ t("index.empty.lanHint") }}</h3>
+      <button
+        @click="showManualConnect = true"
+        class="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition-colors"
+      >
+        {{ t("index.manualConnect") }}
+      </button>
     </div>
 
     <div v-else class="flex justify-center px-4">
@@ -73,6 +79,7 @@
     </div>
 
     <SessionDialog />
+    <ManualConnectDialog v-model:show="showManualConnect" @connect="handleManualConnect" />
   </div>
 </template>
 
@@ -81,6 +88,7 @@ import { PeerDeviceType } from "@/services/signaling";
 import {
   setupConnection,
   startSendSession,
+  startManualSendSession,
   store,
   updateAliasState,
 } from "@/services/store";
@@ -89,6 +97,7 @@ import { protocolVersion } from "~/services/webrtc";
 import { generateRandomAlias } from "~/utils/alias";
 import { useFileDialog } from "@vueuse/core";
 import SessionDialog from "~/components/dialog/SessionDialog.vue";
+import ManualConnectDialog from "~/components/dialog/ManualConnectDialog.vue";
 import {
   cryptoKeyToPem,
   generateClientTokenFromCurrentTimestamp,
@@ -126,10 +135,42 @@ const minDelayFinished = ref(false);
 const webCryptoSupported = ref(true);
 
 const targetId = ref("");
+const showManualConnect = ref(false);
 
 const selectPeer = (id: string) => {
   targetId.value = id;
   openFileDialog();
+};
+
+const handleManualConnect = async (ip: string, port: number) => {
+  try {
+    const { open: openManualFileDialog, onChange: onManualChange } = useFileDialog();
+
+    onManualChange(async (files) => {
+      if (!files || files.length === 0) {
+        showManualConnect.value = false;
+        return;
+      }
+
+      try {
+        await startManualSendSession({
+          files,
+          targetIp: ip,
+          targetPort: port,
+        });
+        showManualConnect.value = false;
+      } catch (error) {
+        console.error("Manual send failed:", error);
+        alert(`Failed to send files: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
+    });
+
+    showManualConnect.value = false;
+    openManualFileDialog();
+  } catch (error) {
+    console.error("Error in manual connect:", error);
+    alert(`Connection failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+  }
 };
 
 const updateAlias = async () => {

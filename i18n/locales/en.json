@@ -18,9 +18,20 @@
     },
     "enterAlias": "Enter name",
     "enterPin": "Enter PIN",
+    "manualConnect": "Connect by IP Address",
     "progress": {
       "titleSending": "Sending files...",
       "titleReceiving": "Receiving files..."
     }
+  },
+  "manualConnect": {
+    "title": "Manual Connection",
+    "ipAddress": "IP Address",
+    "port": "Port",
+    "connect": "Connect",
+    "connecting": "Connecting...",
+    "cancel": "Cancel",
+    "errorNoIp": "Please enter an IP address",
+    "errorInvalidIp": "Invalid IP address format"
   }
 }
