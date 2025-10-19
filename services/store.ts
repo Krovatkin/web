@@ -343,6 +343,19 @@ export async function startManualSendSession({
     }
   } catch (error) {
     console.error("Manual send session failed:", error);
+
+    // Auto-remove peer if connection failed
+    const peerId = `manual-${targetIp}:${targetPort}`;
+    if (store.manualPeers.has(peerId)) {
+      const shouldRemove = confirm(
+        `Failed to connect to ${targetIp}. Remove from peer list?`
+      );
+      if (shouldRemove) {
+        store.manualPeers.delete(peerId);
+        store.peers = store.peers.filter((p) => p.id !== peerId);
+      }
+    }
+
     // Mark all pending files as error
     for (const fileId in store.session.fileState) {
       if (store.session.fileState[fileId].state === "pending") {
