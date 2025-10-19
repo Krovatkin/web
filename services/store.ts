@@ -13,6 +13,7 @@ import {
   sendFiles,
 } from "~/services/webrtc";
 import { generateClientTokenFromCurrentTimestamp } from "~/services/crypto";
+import { sendFilesViaHttp, type HttpPeerInfo } from "~/services/http";
 
 export enum SessionState {
   idle = "idle",
@@ -266,3 +267,90 @@ function onFileProgress(progress: FileProgress) {
     store.session.fileState[progress.id].error = progress.error;
   }
 }
+
+export async function startManualSendSession({
+  files,
+  targetIp,
+  targetPort,
+}: {
+  files: FileList;
+  targetIp: string;
+  targetPort?: number;
+}): Promise<void> {
+  store.session.state = SessionState.sending;
+  const fileState: Record<string, FileState> = {};
+
+  // Prepare file state
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const fileId = i.toString();
+    fileState[fileId] = {
+      id: fileId,
+      name: file.name,
+      curr: 0,
+      total: file.size,
+      state: "pending",
+    };
+  }
+
+  store.session.fileState = fileState;
+  store.session.curr = 0;
+  store.session.total = Array.from(files).reduce(
+    (acc, file) => acc + file.size,
+    0,
+  );
+
+  // Prepare peer info
+  const info: HttpPeerInfo = {
+    alias: store.client?.alias || "LocalSend Web",
+    version: "2.0",
+    deviceModel: navigator.userAgent,
+    deviceType: "web",
+    fingerprint: "web-client",
+    port: 0,
+    protocol: "http",
+    download: false,
+  };
+
+  try {
+    await sendFilesViaHttp({
+      targetIp,
+      targetPort,
+      files,
+      info,
+      onFileProgress: (progress) => {
+        store.session.fileState[progress.id].curr = progress.curr;
+        store.session.curr = Object.values(store.session.fileState).reduce(
+          (acc, file) => acc + file.curr,
+          0,
+        );
+      },
+      onFilesSkip: (fileIds) => {
+        for (const id of fileIds) {
+          store.session.fileState[id].state = "skipped";
+        }
+      },
+    });
+
+    // Mark all files as finished
+    for (const fileId in store.session.fileState) {
+      if (store.session.fileState[fileId].state === "pending") {
+        store.session.fileState[fileId].state = "finished";
+      }
+    }
+  } catch (error) {
+    console.error("Manual send session failed:", error);
+    // Mark all pending files as error
+    for (const fileId in store.session.fileState) {
+      if (store.session.fileState[fileId].state === "pending") {
+        store.session.fileState[fileId].state = "error";
+        store.session.fileState[fileId].error =
+          error instanceof Error ? error.message : "Unknown error";
+      }
+    }
+    throw error;
+  } finally {
+    store.session.state = SessionState.idle;
+  }
+}
+
