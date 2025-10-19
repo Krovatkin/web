@@ -11,7 +11,7 @@
         <span class="bg-teal-900 px-1 py-0.5 rounded">{{
           props.peer.deviceModel ?? "Unknown"
         }}</span>
-        <span class="ml-2 bg-teal-900 px-1 py-0.5 rounded">WebRTC</span>
+        <span class="ml-2 bg-teal-900 px-1 py-0.5 rounded">{{ connectionType }}</span>
       </p>
     </div>
   </div>
@@ -23,6 +23,11 @@ import { type ClientInfo } from "@/services/signaling";
 const props = defineProps<{
   peer: ClientInfo;
 }>();
+
+const connectionType = computed(() => {
+  // Manual peers have IDs starting with "manual-"
+  return props.peer.id.startsWith("manual-") ? "HTTP" : "WebRTC";
+});
 
 const iconName = computed(() => {
   switch (props.peer.deviceType) {

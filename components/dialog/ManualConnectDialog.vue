@@ -98,10 +98,15 @@ const close = () => {
   }
 };
 
-// Reset connecting state when dialog is closed
+// Reset connecting state when dialog is opened/closed
 watch(show, (newShow) => {
   if (!newShow) {
     connecting.value = false;
+    error.value = "";
+  } else {
+    // Reset form when opening
+    ipAddress.value = "";
+    port.value = 53317;
   }
 });
 </script>

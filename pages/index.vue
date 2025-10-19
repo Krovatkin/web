@@ -87,8 +87,8 @@
 import { PeerDeviceType } from "@/services/signaling";
 import {
   setupConnection,
-  startSendSession,
-  startManualSendSession,
+  startSendSessionToManualPeer,
+  addManualPeer,
   store,
   updateAliasState,
 } from "@/services/store";
@@ -122,9 +122,9 @@ onChange(async (files) => {
 
   if (!store.signaling) return;
 
-  await startSendSession({
+  await startSendSessionToManualPeer({
     files,
-    targetId: targetId.value,
+    peerId: targetId.value,
     onPin: async () => {
       return prompt(t("index.enterPin"));
     },
@@ -144,29 +144,11 @@ const selectPeer = (id: string) => {
 
 const handleManualConnect = async (ip: string, port: number) => {
   try {
-    const { open: openManualFileDialog, onChange: onManualChange } = useFileDialog();
-
-    onManualChange(async (files) => {
-      if (!files || files.length === 0) {
-        showManualConnect.value = false;
-        return;
-      }
-
-      try {
-        await startManualSendSession({
-          files,
-          targetIp: ip,
-          targetPort: port,
-        });
-        showManualConnect.value = false;
-      } catch (error) {
-        console.error("Manual send failed:", error);
-        alert(`Failed to send files: ${error instanceof Error ? error.message : "Unknown error"}`);
-      }
+    await addManualPeer({
+      targetIp: ip,
+      targetPort: port,
     });
-
     showManualConnect.value = false;
-    openManualFileDialog();
   } catch (error) {
     console.error("Error in manual connect:", error);
     alert(`Connection failed: ${error instanceof Error ? error.message : "Unknown error"}`);

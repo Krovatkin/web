@@ -13,7 +13,7 @@ import {
   sendFiles,
 } from "~/services/webrtc";
 import { generateClientTokenFromCurrentTimestamp } from "~/services/crypto";
-import { sendFilesViaHttp, type HttpPeerInfo } from "~/services/http";
+import { sendFilesViaHttp, discoverHttpPeer, type HttpPeerInfo } from "~/services/http";
 
 export enum SessionState {
   idle = "idle",
@@ -53,6 +53,9 @@ export const store = reactive({
 
   // List of peers connected to the same room
   peers: [] as ClientInfo[],
+
+  // Manual peers added via IP address (stored separately to track IP/port)
+  manualPeers: new Map<string, { ip: string; port: number }>(),
 
   // Current session information
   session: {
@@ -352,5 +355,70 @@ export async function startManualSendSession({
   } finally {
     store.session.state = SessionState.idle;
   }
+}
+
+export async function addManualPeer({
+  targetIp,
+  targetPort = 53317,
+}: {
+  targetIp: string;
+  targetPort?: number;
+}): Promise<void> {
+  try {
+    const deviceInfo = await discoverHttpPeer({ targetIp, targetPort });
+
+    const peerId = `manual-${targetIp}:${targetPort}`;
+
+    // Check if already exists
+    const existingPeer = store.peers.find((p) => p.id === peerId);
+    if (existingPeer) {
+      console.log("Peer already added:", peerId);
+      return;
+    }
+
+    // Add to manual peers map
+    store.manualPeers.set(peerId, { ip: targetIp, port: targetPort });
+
+    // Add to peers list
+    const newPeer: ClientInfo = {
+      id: peerId,
+      alias: deviceInfo.alias,
+      version: "2.0",
+      deviceModel: deviceInfo.deviceModel,
+      deviceType: deviceInfo.deviceType || "headless",
+      token: "manual-peer",
+    };
+
+    store.peers = [...store.peers, newPeer];
+
+    console.log("Manual peer added:", newPeer);
+  } catch (error) {
+    console.error("Failed to add manual peer:", error);
+    throw error;
+  }
+}
+
+export async function startSendSessionToManualPeer({
+  files,
+  peerId,
+  onPin,
+}: {
+  files: FileList;
+  peerId: string;
+  onPin: () => Promise<string | null>;
+}): Promise<void> {
+  const manualPeerInfo = store.manualPeers.get(peerId);
+
+  if (!manualPeerInfo) {
+    // Not a manual peer, use regular WebRTC flow
+    return startSendSession({ files, targetId: peerId, onPin });
+  }
+
+  // Use HTTP flow for manual peer
+  await startManualSendSession({
+    files,
+    targetIp: manualPeerInfo.ip,
+    targetPort: manualPeerInfo.port,
+  });
 }
 
