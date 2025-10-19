@@ -9,6 +9,18 @@ export type HttpPeerInfo = {
   download: boolean;
 };
 
+export type HttpDeviceInfo = {
+  alias: string;
+  version: string;
+  deviceModel?: string;
+  deviceType?: string;
+  fingerprint: string;
+  port: number;
+  protocol: string;
+  download: boolean;
+  announce: boolean;
+};
+
 export type HttpPrepareUploadRequest = {
   info: HttpPeerInfo;
   files: Record<string, HttpFileInfo>;
@@ -177,4 +189,40 @@ export async function sendFilesViaHttp({
   }
 
   console.log("All files uploaded successfully");
+}
+
+export async function discoverHttpPeer({
+  targetIp,
+  targetPort = 53317,
+}: {
+  targetIp: string;
+  targetPort?: number;
+}): Promise<{ alias: string; deviceModel?: string; deviceType?: string }> {
+  const infoUrl = `http://${targetIp}:${targetPort}/api/localsend/v2/info`;
+
+  console.log("Fetching device info from:", infoUrl);
+
+  try {
+    const response = await fetch(infoUrl, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get device info: ${response.status}`);
+    }
+
+    const deviceInfo: HttpDeviceInfo = await response.json();
+    console.log("Device info:", deviceInfo);
+
+    return {
+      alias: deviceInfo.alias || targetIp,
+      deviceModel: deviceInfo.deviceModel,
+      deviceType: deviceInfo.deviceType,
+    };
+  } catch (error) {
+    console.error("Failed to discover peer:", error);
+    throw new Error(
+      `Cannot connect to ${targetIp}:${targetPort}. Make sure the device is reachable. ${error}`,
+    );
+  }
 }
