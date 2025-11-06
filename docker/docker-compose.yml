@@ -6,5 +6,6 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     ports:
-      - "3000:3000"
+      - "8675:443"  # HTTPS for WebRTC discovery
+      - "8676:80"   # HTTP for manual peer connections
     restart: unless-stopped

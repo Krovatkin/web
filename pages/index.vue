@@ -38,36 +38,13 @@
       </div>
     </div>
 
-    <div
-      v-if="!store.signaling"
-      class="flex-1 flex flex-col items-center justify-center text-center px-2"
-    >
-      <h3 v-if="minDelayFinished" class="text-3xl">
-        {{
-          webCryptoSupported
-            ? t("index.connecting")
-            : t("index.webCryptoNotSupported")
-        }}
-      </h3>
-    </div>
-
-    <div
-      v-else-if="store.peers.length === 0"
-      class="flex-1 flex flex-col items-center justify-center text-center px-2"
-    >
-      <h3 class="text-3xl">{{ t("index.empty.title") }}</h3>
-      <h3 class="mt-2">{{ t("index.empty.deviceHint") }}</h3>
-      <h3>{{ t("index.empty.lanHint") }}</h3>
-      <button
-        @click="showManualConnect = true"
-        class="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition-colors"
-      >
-        {{ t("index.manualConnect") }}
-      </button>
-    </div>
-
-    <div v-else class="flex justify-center px-4">
+    <!-- Show peer list if we have any peers (manual or WebRTC) -->
+    <div v-if="store.peers.length > 0" class="flex justify-center px-4">
       <div class="w-96">
+        <!-- Show warning banner if Web Crypto is not available -->
+        <div v-if="!webCryptoSupported" class="mb-4 p-3 bg-yellow-100 dark:bg-yellow-900 rounded-md text-center">
+          <p class="text-sm">⚠️ Web Crypto API unavailable - WebRTC discovery disabled</p>
+        </div>
         <PeerCard
           v-for="peer in store.peers"
           :key="peer.id"
@@ -82,6 +59,46 @@
           {{ t("index.manualConnect") }}
         </button>
       </div>
+    </div>
+
+    <!-- No peers: show appropriate message based on WebRTC status -->
+    <div
+      v-else-if="!webCryptoSupported && !store.signaling"
+      class="flex-1 flex flex-col items-center justify-center text-center px-2"
+    >
+      <h3 v-if="minDelayFinished" class="text-3xl">{{ t("index.empty.title") }}</h3>
+      <h3 class="mt-2 mb-2">⚠️ Web Crypto API is not available. WebRTC peer discovery is disabled.</h3>
+      <h3>You can still connect to peers manually using their IP address.</h3>
+      <button
+        @click="showManualConnect = true"
+        class="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition-colors"
+      >
+        {{ t("index.manualConnect") }}
+      </button>
+    </div>
+
+    <div
+      v-else-if="!store.signaling"
+      class="flex-1 flex flex-col items-center justify-center text-center px-2"
+    >
+      <h3 v-if="minDelayFinished" class="text-3xl">
+        {{ t("index.connecting") }}
+      </h3>
+    </div>
+
+    <div
+      v-else
+      class="flex-1 flex flex-col items-center justify-center text-center px-2"
+    >
+      <h3 class="text-3xl">{{ t("index.empty.title") }}</h3>
+      <h3 class="mt-2">{{ t("index.empty.deviceHint") }}</h3>
+      <h3>{{ t("index.empty.lanHint") }}</h3>
+      <button
+        @click="showManualConnect = true"
+        class="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition-colors"
+      >
+        {{ t("index.manualConnect") }}
+      </button>
     </div>
 
     <SessionDialog />
@@ -126,7 +143,13 @@ onChange(async (files) => {
 
   if (files.length === 0) return;
 
-  if (!store.signaling) return;
+  // Check if this is a manual peer (which doesn't need signaling)
+  const isManualPeer = store.manualPeers.has(targetId.value);
+
+  if (!store.signaling && !isManualPeer) {
+    // No signaling available and not a manual peer - can't send
+    return;
+  }
 
   await startSendSessionToManualPeer({
     files,
@@ -201,7 +224,8 @@ onMounted(async () => {
   }, 1000);
 
   if (!webCryptoSupported.value) {
-    console.error("Web Crypto API is not supported in this browser.");
+    console.warn("Web Crypto API is not supported. WebRTC peer discovery disabled. Manual connections still available.");
+    // Don't return early - allow manual connections to work
     return;
   }
 
