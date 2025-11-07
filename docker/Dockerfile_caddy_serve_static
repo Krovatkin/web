@@ -16,11 +16,6 @@ RUN apk add --no-cache nodejs openssl
 # Copy built Nuxt app
 COPY --from=builder /app/.output /app
 
-# Copy public files to where Nitro's serveStatic expects them
-# This allows Nitro to serve static files, simplifying the Caddyfile
-RUN mkdir -p /app/server/chunks/public && \
-    cp -r /app/public/* /app/server/chunks/public/
-
 # Generate self-signed certificates
 RUN mkdir -p /certs && \
     openssl req -x509 -newkey rsa:2048 -nodes \
@@ -30,7 +25,7 @@ RUN mkdir -p /certs && \
     -subj "/CN=localhost" \
     -addext "subjectAltName=DNS:localhost,DNS:*.local,IP:127.0.0.1"
 
-# Caddyfile
+# Caddyfile (Caddy serves static files directly)
 COPY <<EOT /etc/caddy/Caddyfile
 {
     auto_https off
@@ -47,7 +42,28 @@ COPY <<EOT /etc/caddy/Caddyfile
         }
     }
 
-    # Everything else → Nitro (static files, API routes, SSR)
+    # Static files (Caddy serves these directly)
+    handle /_nuxt/* {
+        root * /app/public
+        file_server
+    }
+
+    handle /favicon.ico {
+        root * /app/public
+        file_server
+    }
+
+    handle /apple-touch-icon.png {
+        root * /app/public
+        file_server
+    }
+
+    handle /robots.txt {
+        root * /app/public
+        file_server
+    }
+
+    # Everything else → Nitro (API routes, SSR)
     handle {
         reverse_proxy localhost:3002
     }

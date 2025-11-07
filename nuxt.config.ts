@@ -60,5 +60,6 @@ export default defineNuxtConfig({
     prerender: {
       autoSubfolderIndex: false,
     },
+    serveStatic: true, // Enable static file serving (files copied to /app/server/chunks/public/ in Dockerfile)
   },
 });
