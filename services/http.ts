@@ -76,8 +76,8 @@ export async function sendFilesViaHttp({
     files: fileMap,
   };
 
-  // Step 2: Send prepare-upload request
-  const prepareUrl = `http://${targetIp}:${targetPort}/api/localsend/v2/prepare-upload`;
+  // Step 2: Send prepare-upload request (via proxy to avoid CORS)
+  const prepareUrl = `/api/proxy/${targetIp}:${targetPort}/api/localsend/v2/prepare-upload`;
 
   console.log("Sending prepare-upload request to:", prepareUrl);
 
@@ -136,7 +136,7 @@ export async function sendFilesViaHttp({
 
     console.log(`Uploading file: ${file.name}`);
 
-    const uploadUrl = `http://${targetIp}:${targetPort}/api/localsend/v2/upload?sessionId=${encodeURIComponent(prepareResponse.sessionId)}&fileId=${encodeURIComponent(fileId)}&token=${encodeURIComponent(token)}`;
+    const uploadUrl = `/api/proxy/${targetIp}:${targetPort}/api/localsend/v2/upload?sessionId=${encodeURIComponent(prepareResponse.sessionId)}&fileId=${encodeURIComponent(fileId)}&token=${encodeURIComponent(token)}`;
 
     try {
       const totalSize = file.size;
@@ -198,7 +198,7 @@ export async function discoverHttpPeer({
   targetIp: string;
   targetPort?: number;
 }): Promise<{ alias: string; deviceModel?: string; deviceType?: string }> {
-  const infoUrl = `http://${targetIp}:${targetPort}/api/localsend/v2/info`;
+  const infoUrl = `/api/proxy/${targetIp}:${targetPort}/api/localsend/v2/info`;
 
   console.log("Fetching device info from:", infoUrl);
 

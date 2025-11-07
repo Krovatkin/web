@@ -8,7 +8,9 @@
     "test": "vitest",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
+    "generate:certs": "bash scripts/generate-certs.sh",
     "preview": "nuxt preview",
+    "start": "node .output/server-entry.mjs",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {

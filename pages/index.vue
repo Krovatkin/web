@@ -114,6 +114,8 @@ import {
   addManualPeer,
   store,
   updateAliasState,
+  startAutomaticDiscovery,
+  stopAutomaticDiscovery,
 } from "@/services/store";
 import { getAgentInfoString } from "~/utils/userAgent";
 import { protocolVersion } from "~/services/webrtc";
@@ -223,12 +225,15 @@ onMounted(async () => {
     minDelayFinished.value = true;
   }, 1000);
 
+  // Always start automatic discovery for native clients (via UDP multicast)
+  startAutomaticDiscovery();
+
   if (!webCryptoSupported.value) {
-    console.warn("Web Crypto API is not supported. WebRTC peer discovery disabled. Manual connections still available.");
-    // Don't return early - allow manual connections to work
+    console.warn("Web Crypto API is not supported. WebRTC peer discovery disabled. Using server-side discovery only.");
     return;
   }
 
+  // Continue with WebRTC setup for web-to-web discovery
   await upgradeToEd25519IfSupported();
 
   store.key = await generateKeyPair();
@@ -252,6 +257,11 @@ onMounted(async () => {
       return prompt(t("index.enterPin"));
     },
   });
+});
+
+onUnmounted(() => {
+  // Clean up discovery interval when component unmounts
+  stopAutomaticDiscovery();
 });
 </script>
 

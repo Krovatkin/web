@@ -57,6 +57,9 @@ export const store = reactive({
   // Manual peers added via IP address (stored separately to track IP/port)
   manualPeers: new Map<string, { ip: string; port: number }>(),
 
+  // Auto-discovery interval
+  _discoveryInterval: null as ReturnType<typeof setInterval> | null,
+
   // Current session information
   session: {
     state: SessionState.idle,
@@ -410,6 +413,100 @@ export async function addManualPeer({
     throw error;
   }
 }
+
+/**
+ * Start automatic discovery via server-side UDP multicast listener
+ * This is used when Web Crypto API is not available (HTTP mode)
+ */
+export function startAutomaticDiscovery(): void {
+  // Stop any existing discovery
+  if (store._discoveryInterval) {
+    clearInterval(store._discoveryInterval);
+  }
+
+  // Poll the discovery endpoint every 5 seconds
+  const pollDiscovery = async () => {
+    try {
+      const response = await fetch('/api/discover');
+      const data = await response.json() as {
+        peers: Array<{
+          id: string;
+          ip: string;
+          alias: string;
+          deviceModel?: string;
+          deviceType?: string;
+          port: number;
+          protocol: 'http' | 'https';
+        }>
+      };
+
+      for (const discoveredPeer of data.peers) {
+        const peerId = `discovered-${discoveredPeer.ip}:${discoveredPeer.port}`;
+
+        // Check if already exists
+        const existingPeer = store.peers.find((p) => p.id === peerId);
+        if (existingPeer) {
+          continue;
+        }
+
+        // Add to manual peers map (so we can send files via HTTP)
+        store.manualPeers.set(peerId, {
+          ip: discoveredPeer.ip,
+          port: discoveredPeer.port
+        });
+
+        // Add to peers list
+        const newPeer: ClientInfo = {
+          id: peerId,
+          alias: discoveredPeer.alias,
+          version: "2.0",
+          deviceModel: discoveredPeer.deviceModel,
+          deviceType: discoveredPeer.deviceType || "desktop",
+          token: "discovered-peer",
+        };
+
+        store.peers = [...store.peers, newPeer];
+        console.log("Auto-discovered peer:", newPeer);
+      }
+
+      // Remove peers that are no longer in the discovery list
+      const currentDiscoveredIds = new Set(
+        data.peers.map(p => `discovered-${p.ip}:${p.port}`)
+      );
+
+      store.peers = store.peers.filter(peer => {
+        if (peer.id.startsWith('discovered-')) {
+          const stillExists = currentDiscoveredIds.has(peer.id);
+          if (!stillExists) {
+            store.manualPeers.delete(peer.id);
+            console.log("Removed stale peer:", peer.alias);
+          }
+          return stillExists;
+        }
+        return true;
+      });
+
+    } catch (error) {
+      console.error("Discovery poll failed:", error);
+    }
+  };
+
+  // Initial poll
+  pollDiscovery();
+
+  // Poll every 5 seconds
+  store._discoveryInterval = setInterval(pollDiscovery, 5000);
+  console.log("Automatic discovery started");
+}
+
+export function stopAutomaticDiscovery(): void {
+  if (store._discoveryInterval) {
+    clearInterval(store._discoveryInterval);
+    store._discoveryInterval = null;
+    console.log("Automatic discovery stopped");
+  }
+}
+
 
 export async function startSendSessionToManualPeer({
   files,

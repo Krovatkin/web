@@ -5,7 +5,6 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    ports:
-      - "8675:443"  # HTTPS for WebRTC discovery
-      - "8676:80"   # HTTP for manual peer connections
+    # Use host networking to receive UDP multicast for native client discovery
+    network_mode: host
     restart: unless-stopped

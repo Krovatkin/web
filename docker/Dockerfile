@@ -6,31 +6,83 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run generate
+RUN npm run build
 
 FROM caddy:alpine
 
-COPY --from=builder /app/.output/public /usr/share/caddy
+# Install Node.js and OpenSSL for Nitro server and certificates
+RUN apk add --no-cache nodejs openssl
 
-COPY <<"EOT" /etc/caddy/Caddyfile
+# Copy built Nuxt app
+COPY --from=builder /app/.output /app
+
+# Generate self-signed certificates
+RUN mkdir -p /certs && \
+    openssl req -x509 -newkey rsa:2048 -nodes \
+    -keyout /certs/key.pem \
+    -out /certs/cert.pem \
+    -days 365 \
+    -subj "/CN=localhost" \
+    -addext "subjectAltName=DNS:localhost,DNS:*.local,IP:127.0.0.1"
+
+# Caddyfile with proxy and static file serving
+COPY <<EOT /etc/caddy/Caddyfile
 {
-    auto_https disable_redirects
+    auto_https off
 }
 
-# HTTPS version (for WebRTC peer discovery - requires Web Crypto API)
-:443 {
-    tls internal {
-        on_demand
+:3000 {
+    tls /certs/cert.pem /certs/key.pem
+
+    # Proxy for native clients
+    handle_path /api/proxy/* {
+        @target path_regexp target ^/([^/]+)(.*)$
+        reverse_proxy @target {re.target.1} {
+            rewrite {re.target.2}
+        }
     }
-    file_server
-    root * /usr/share/caddy
-}
 
-# HTTP version (for manual HTTP peer connections)
-:80 {
-    file_server
-    root * /usr/share/caddy
+    # API routes → Nitro
+    handle /api/* {
+        reverse_proxy localhost:3002
+    }
+
+    # Static files → serve directly from /app/public
+    handle /_nuxt/* {
+        root * /app/public
+        file_server
+    }
+
+    handle /favicon.ico {
+        root * /app/public
+        file_server
+    }
+
+    handle /apple-touch-icon.png {
+        root * /app/public
+        file_server
+    }
+
+    handle /robots.txt {
+        root * /app/public
+        file_server
+    }
+
+    # Everything else → Nitro (SSR)
+    handle {
+        reverse_proxy localhost:3002
+    }
 }
 EOT
 
-EXPOSE 443 80
+# Start script
+COPY <<EOT /start.sh
+#!/bin/sh
+cd /app
+PORT=3002 node server/index.mjs &
+caddy run --config /etc/caddy/Caddyfile
+EOT
+
+RUN chmod +x /start.sh
+
+CMD ["/start.sh"]
